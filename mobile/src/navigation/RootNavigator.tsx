@@ -15,7 +15,7 @@ export const RootNavigator = () => {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
+      <View className="flex-1 items-center justify-center bg-slate-50 px-6">
         <ActivityIndicator size="large" color="#15803d" />
       </View>
     );
