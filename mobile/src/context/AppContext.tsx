@@ -23,14 +23,14 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     const bootstrap = async () => {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        setLoading(false);
-        return;
-      }
-      const parsed = JSON.parse(raw) as AuthSession;
-      setApiToken(parsed.token);
       try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          return;
+        }
+
+        const parsed = JSON.parse(raw) as AuthSession;
+        setApiToken(parsed.token);
         const user = await getProfile();
         updateSession({ token: parsed.token, user });
       } catch {
@@ -41,7 +41,11 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
       }
     };
 
-    bootstrap().catch(() => setLoading(false));
+    bootstrap().catch(async () => {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      setApiToken();
+      setLoading(false);
+    });
   }, []);
 
   const setSession = async (nextSession: AuthSession | null) => {
