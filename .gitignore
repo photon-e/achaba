@@ -1,0 +1,12 @@
+.venv/
+backend/.venv/
+backend/db.sqlite3
+__pycache__/
+*.pyc
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+.DS_Store
+*.log
+backend/.env
+mobile/.env
