@@ -8,7 +8,7 @@ import { Screen } from "@/components/Screen";
 import { useApp } from "@/context/AppContext";
 import { subscribeToRideChannel } from "@/services/firebaseService";
 import { getApiErrorMessage } from "@/services/api";
-import { fetchNearbyRiders, NearbyRider, requestRide } from "@/services/rideService";
+import { fetchNearbyRiders, NearbyRider, requestRide, watchRideHistory } from "@/services/rideService";
 import { getCurrentCoordinates } from "@/utils/location";
 
 const DEFAULT_PICKUP = { latitude: 6.5244, longitude: 3.3792 };
@@ -95,12 +95,36 @@ export const CustomerHomeScreen = () => {
       return undefined;
     }
 
-    return subscribeToRideChannel(`ride-${activeRide.id}`, (payload) => {
+    const unsubscribeRealtime = subscribeToRideChannel(`ride-${activeRide.id}`, (payload) => {
       if (payload.status) {
-        setActiveRide({ ...activeRide, status: payload.status as typeof activeRide.status });
+        setActiveRide((currentRide) =>
+          currentRide ? { ...currentRide, status: payload.status as typeof currentRide.status } : currentRide
+        );
       }
     });
-  }, [activeRide, setActiveRide]);
+
+    const unsubscribePolling = watchRideHistory(
+      (rides) => rides.find((ride) => ride.id === activeRide.id) ?? null,
+      (ride) => {
+        if (ride) {
+          setActiveRide(ride);
+          return;
+        }
+
+        setActiveRide(null);
+      },
+      {
+        onError: (error) => {
+          setErrorMessage((currentMessage) => currentMessage || getApiErrorMessage(error, "Unable to refresh the latest ride status."));
+        }
+      }
+    );
+
+    return () => {
+      unsubscribeRealtime();
+      unsubscribePolling();
+    };
+  }, [activeRide?.id, setActiveRide]);
 
   const loadNearbyRiders = async (forceRefresh = false) => {
     if (hasCoordinateError) {
