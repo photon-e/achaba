@@ -7,9 +7,16 @@ import { useApp } from "@/context/AppContext";
 import { toggleRiderStatus } from "@/services/authService";
 import { subscribeToRideChannel } from "@/services/firebaseService";
 import { getApiErrorMessage } from "@/services/api";
-import { acceptRide, completeRide, rideHistory, startRide } from "@/services/rideService";
+import { acceptRide, completeRide, rideHistory, startRide, watchRideHistory } from "@/services/rideService";
 import { Ride } from "@/types";
 import { getCurrentCoordinates } from "@/utils/location";
+
+const ACTIVE_RIDE_STATUSES: Ride["status"][] = ["requested", "accepted", "ongoing"];
+
+const pickActiveRide = (rides: Ride[]) =>
+  rides
+    .filter((ride) => ACTIVE_RIDE_STATUSES.includes(ride.status))
+    .sort((left, right) => right.id - left.id)[0] ?? null;
 
 export const RiderHomeScreen = () => {
   const { session, setSession } = useApp();
@@ -27,11 +34,15 @@ export const RiderHomeScreen = () => {
   );
 
   useEffect(() => {
+    setIsOnline(session?.user.rider_profile?.is_online ?? false);
+  }, [session?.user.rider_profile?.is_online]);
+
+  useEffect(() => {
     if (!session?.user.id) {
       return undefined;
     }
 
-    return subscribeToRideChannel(`rider-${session.user.id}`, (payload) => {
+    const unsubscribeRealtime = subscribeToRideChannel(`rider-${session.user.id}`, (payload) => {
       if (payload.ride_id) {
         setIncomingRide((currentRide) => ({
           id: Number(payload.ride_id),
@@ -47,6 +58,23 @@ export const RiderHomeScreen = () => {
         }));
       }
     });
+
+    const unsubscribePolling = watchRideHistory(
+      pickActiveRide,
+      (ride) => {
+        setIncomingRide(ride);
+      },
+      {
+        onError: (error) => {
+          setErrorMessage((currentMessage) => currentMessage || getApiErrorMessage(error, "Unable to refresh incoming rides right now."));
+        }
+      }
+    );
+
+    return () => {
+      unsubscribeRealtime();
+      unsubscribePolling();
+    };
   }, [session?.user.id]);
 
   const loadHistory = async (forceRefresh = false) => {
@@ -54,6 +82,7 @@ export const RiderHomeScreen = () => {
     try {
       const rides = await rideHistory({ forceRefresh });
       setHistory(rides);
+      setIncomingRide(pickActiveRide(rides));
       setErrorMessage("");
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Unable to load ride history right now."));
@@ -77,6 +106,19 @@ export const RiderHomeScreen = () => {
         current_lng: coords.longitude
       });
       setIsOnline(nextStatus);
+      await setSession(
+        session
+          ? {
+              ...session,
+              user: {
+                ...session.user,
+                rider_profile: session.user.rider_profile
+                  ? { ...session.user.rider_profile, is_online: nextStatus, current_lat: coords.latitude, current_lng: coords.longitude }
+                  : session.user.rider_profile
+              }
+            }
+          : null
+      );
     } catch (error) {
       setErrorMessage(
         getApiErrorMessage(error, "Status update failed. Please check location permissions and your internet connection.")
@@ -208,7 +250,7 @@ export const RiderHomeScreen = () => {
           </>
         ) : (
           <Text className="text-sm text-slate-500">
-            No request yet. Turn on availability and wait for Firebase or mock notifications.
+            No request yet. Turn on availability and wait for Firebase or polling updates.
           </Text>
         )}
       </View>
