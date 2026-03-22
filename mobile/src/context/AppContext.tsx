@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from "react";
+import { Dispatch, SetStateAction } from "react";
 
 import { setApiToken } from "@/services/api";
 import { getProfile } from "@/services/authService";
@@ -10,7 +11,7 @@ interface AppContextValue {
   activeRide: Ride | null;
   loading: boolean;
   setSession: (session: AuthSession | null) => Promise<void>;
-  setActiveRide: (ride: Ride | null) => void;
+  setActiveRide: Dispatch<SetStateAction<Ride | null>>;
 }
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -55,6 +56,7 @@ export const AppProvider = ({ children }: PropsWithChildren) => {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
     } else {
       await AsyncStorage.removeItem(STORAGE_KEY);
+      setActiveRide(null);
     }
   };
 

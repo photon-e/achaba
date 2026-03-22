@@ -27,12 +27,25 @@ const historyInFlight = new Map<string, Promise<Ride[]>>();
 const NEARBY_TTL_MS = 30_000;
 const HISTORY_TTL_MS = 15_000;
 const HISTORY_CACHE_KEY = "ride-history";
+const DEFAULT_POLL_INTERVAL_MS = 4_000;
 
 const buildNearbyCacheKey = (lat: number, lng: number) => `${lat.toFixed(3)}:${lng.toFixed(3)}`;
 
 const invalidateRideCaches = () => {
   historyCache.clear();
   nearbyCache.clear();
+};
+
+const areRidesEqual = (left?: Ride | null, right?: Ride | null) => {
+  if (!left && !right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return JSON.stringify(left) === JSON.stringify(right);
 };
 
 export const fetchNearbyRiders = async (
@@ -116,4 +129,40 @@ export const rideHistory = async (options?: { forceRefresh?: boolean }) => {
 
   historyInFlight.set(HISTORY_CACHE_KEY, request);
   return request;
+};
+
+export const watchRideHistory = (
+  selector: (rides: Ride[]) => Ride | null,
+  onChange: (ride: Ride | null) => void,
+  options?: { intervalMs?: number; onError?: (error: unknown) => void }
+) => {
+  let cancelled = false;
+  let previousRide: Ride | null = null;
+
+  const poll = async () => {
+    try {
+      const rides = await rideHistory({ forceRefresh: true });
+      if (cancelled) {
+        return;
+      }
+
+      const nextRide = selector(rides);
+      if (!areRidesEqual(previousRide, nextRide)) {
+        previousRide = nextRide;
+        onChange(nextRide);
+      }
+    } catch (error) {
+      options?.onError?.(error);
+    }
+  };
+
+  poll().catch(() => undefined);
+  const intervalId = setInterval(() => {
+    poll().catch(() => undefined);
+  }, options?.intervalMs ?? DEFAULT_POLL_INTERVAL_MS);
+
+  return () => {
+    cancelled = true;
+    clearInterval(intervalId);
+  };
 };
