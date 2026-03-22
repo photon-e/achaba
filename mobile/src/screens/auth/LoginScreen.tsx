@@ -6,7 +6,7 @@ import { Input } from "@/components/Input";
 import { Screen } from "@/components/Screen";
 import { useApp } from "@/context/AppContext";
 import { requestOtp, verifyOtp } from "@/services/authService";
-import { getApiErrorMessage } from "@/services/api";
+import { getApiBaseUrl, getApiErrorMessage, isLocalApiBaseUrl } from "@/services/api";
 
 export const LoginScreen = ({ navigation }: any) => {
   const { setSession } = useApp();
@@ -86,6 +86,14 @@ export const LoginScreen = ({ navigation }: any) => {
           <Text className="mb-6 text-base text-slate-600">
             We will generate a mock OTP for local development and auto-fill it for you.
           </Text>
+
+          {isLocalApiBaseUrl() ? (
+            <View className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <Text className="text-sm text-amber-800">
+                API base URL is set to {getApiBaseUrl()}. If you are testing on a physical phone, replace localhost or 127.0.0.1 with your computer's local network IP in `EXPO_PUBLIC_API_BASE_URL`.
+              </Text>
+            </View>
+          ) : null}
 
           {errorMessage ? (
             <View className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">

@@ -2,8 +2,10 @@ import axios, { AxiosError } from "axios";
 
 import { ENV } from "@/config/env";
 
+const normalizeBaseUrl = (baseUrl: string) => baseUrl.trim().replace(/\/+$/, "");
+
 export const api = axios.create({
-  baseURL: ENV.apiBaseUrl,
+  baseURL: normalizeBaseUrl(ENV.apiBaseUrl),
   timeout: 15000
 });
 
@@ -14,6 +16,10 @@ export const setApiToken = (token?: string) => {
     delete api.defaults.headers.common.Authorization;
   }
 };
+
+export const isLocalApiBaseUrl = () => /https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?/i.test(api.defaults.baseURL ?? "");
+
+export const getApiBaseUrl = () => api.defaults.baseURL ?? "";
 
 export const getApiErrorMessage = (error: unknown, fallbackMessage: string) => {
   if (axios.isAxiosError(error)) {
@@ -32,7 +38,7 @@ const extractErrorDetail = (error: AxiosError) => {
   const { data } = error.response ?? {};
 
   if (!data) {
-    return error.message;
+    return getNetworkErrorMessage(error);
   }
 
   if (typeof data === "string") {
@@ -56,4 +62,16 @@ const extractErrorDetail = (error: AxiosError) => {
   }
 
   return undefined;
+};
+
+const getNetworkErrorMessage = (error: AxiosError) => {
+  if (error.code === "ECONNABORTED") {
+    return `The API at ${getApiBaseUrl()} took too long to respond. Make sure the backend server is running and reachable.`;
+  }
+
+  if (isLocalApiBaseUrl()) {
+    return `Cannot reach ${getApiBaseUrl()}. If you are using Expo on a physical device, replace 127.0.0.1/localhost with your computer's local network IP in EXPO_PUBLIC_API_BASE_URL.`;
+  }
+
+  return error.message;
 };
